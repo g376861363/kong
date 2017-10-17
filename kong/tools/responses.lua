@@ -102,6 +102,18 @@ local function send_response(status_code)
   -- @param content (Optional) The content to send as a response.
   -- @return ngx.exit (Exit current context)
   return function(content, headers)
+    local ctx = ngx.ctx
+
+    if ctx.delay_response then
+      ctx.delayed_response = {
+        status_code = status_code,
+        content = content,
+        headers = headers,
+      }
+
+      return
+    end
+
     if status_code == _M.status_codes.HTTP_INTERNAL_SERVER_ERROR then
       if content then
         ngx.log(ngx.ERR, tostring(content))
@@ -133,8 +145,16 @@ local function send_response(status_code)
       ngx.say(encoded)
     end
 
-    return ngx.exit(status_code)
+    return ngx.exit(ngx.OK)
   end
+end
+
+function _M.flush_delayed_response(ctx)
+  ctx.delay_response = false
+
+  _M.send(ctx.delayed_response.status_code,
+          ctx.delayed_response.content,
+          ctx.delayed_response.headers)
 end
 
 -- Generate sugar methods (closures) for the most used HTTP status codes.
